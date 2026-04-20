@@ -231,6 +231,15 @@ def admin_delete_post(slug):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+
+@app.route('/newbackend2026')
+def new_backend_check():
+    return jsonify({
+        "version": "cors-fixed-final",
+        "timestamp": datetime.utcnow().isoformat(),
+        "message": "This is the updated backend with manual CORS fix."
+    })
+
 # ============================================================
 # ROOT
 # ============================================================
