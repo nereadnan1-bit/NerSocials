@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog - Portfolio</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <h1><a href="index.html">My Portfolio</a></h1>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="blog.html">Blog</a></li>
+                <li><a href="login.html" id="loginLink">Login</a></li>
+                <li><a href="dashboard.html" id="dashboardLink" style="display:none;">Dashboard</a></li>
+                <li><a href="#" id="logoutBtn" style="display:none;">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <div id="singlePostView" style="display:none;">
+            <article id="singlePost"></article>
+            <p><a href="blog.html" id="backToBlog">← Back to all posts</a></p>
+        </div>
+        <div id="blogList">
+            <h2>All Blog Posts</h2>
+            <div id="postsContainer">Loading...</div>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2026 My Portfolio</p>
+    </footer>
+    <script src="js/main.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        // Blog page logic
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const slug = urlParams.get('slug');
+            const API_URL = window.API_BASE || 'http://localhost:5000';
+
+            if (slug) {
+                // Single post view
+                document.getElementById('blogList').style.display = 'none';
+                document.getElementById('singlePostView').style.display = 'block';
+                try {
+                    const res = await fetch(`${API_URL}/api/blog/posts/${slug}`);
+                    const post = await res.json();
+                    const postDiv = document.getElementById('singlePost');
+                    postDiv.innerHTML = `
+                        <h2>${post.title}</h2>
+                        <p><small>${new Date(post.created_at).toLocaleDateString()}</small></p>
+                        <div class="post-content">${marked.parse(post.content)}</div>
+                    `;
+                } catch (err) {
+                    document.getElementById('singlePost').innerHTML = '<p>Post not found.</p>';
+                }
+            } else {
+                // List all posts
+                const container = document.getElementById('postsContainer');
+                try {
+                    const res = await fetch(`${API_URL}/api/blog/posts`);
+                    const posts = await res.json();
+                    if (posts.length === 0) {
+                        container.innerHTML = '<p>No posts yet.</p>';
+                        return;
+                    }
+                    container.innerHTML = posts.map(post => `
+                        <article class="post-card">
+                            <h3><a href="?slug=${post.slug}">${post.title}</a></h3>
+                            <p>${post.excerpt || post.content.substring(0, 150)}...</p>
+                            <small>${new Date(post.created_at).toLocaleDateString()}</small>
+                        </article>
+                    `).join('');
+                } catch (err) {
+                    container.innerHTML = '<p>Error loading posts.</p>';
+                }
+            }
+        });
+    </script>
+    <!-- Include marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</body>
+</html>

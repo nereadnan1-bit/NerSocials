@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Portfolio</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <h1><a href="index.html">My Portfolio</a></h1>
+            <ul>
+                <li><a href="admin.html" id="adminLink" style="display:none;">Admin</a></li>
+                <li><a href="#" id="logoutBtn">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <h2>User Dashboard</h2>
+        <p>Welcome, <span id="userEmail"></span></p>
+        <div id="adminMessage" style="display:none; background: #f0f0f0; padding: 10px; border-radius: 4px;">
+            You have admin privileges. <a href="admin.html">Go to Admin Panel</a>
+        </div>
+        <p>This is your personal dashboard. More features coming soon.</p>
+    </main>
+    <script src="js/auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check auth
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Fetch user info
+            try {
+                const res = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                if (!res.ok) throw new Error('Auth failed');
+                const user = await res.json();
+                document.getElementById('userEmail').textContent = user.email;
+                if (user.is_admin) {
+                    document.getElementById('adminMessage').style.display = 'block';
+                    document.getElementById('adminLink').style.display = 'inline';
+                }
+            } catch (err) {
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
+
+            document.getElementById('logoutBtn').addEventListener('click', (e) => {
+                e.preventDefault();
+                localStorage.clear();
+                window.location.href = 'index.html';
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+
+# Frontend
+frontend/.DS_Store
+frontend/node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets
+*.pem

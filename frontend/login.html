@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Portfolio</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <h1><a href="index.html">My Portfolio</a></h1>
+        </nav>
+    </header>
+    <main class="login-container">
+        <h2>Login with Email OTP</h2>
+        <div id="step1">
+            <form id="emailForm">
+                <label for="email">Email address</label>
+                <input type="email" id="email" required placeholder="you@example.com">
+                <button type="submit">Send OTP</button>
+            </form>
+        </div>
+        <div id="step2" style="display:none;">
+            <form id="otpForm">
+                <label for="otp">Enter the 6-digit code sent to your email</label>
+                <input type="text" id="otp" required placeholder="123456" pattern="\d{6}" maxlength="6">
+                <button type="submit">Verify</button>
+            </form>
+            <p><a href="#" id="backToEmail">Back</a></p>
+        </div>
+        <div id="message"></div>
+    </main>
+    <script src="js/auth.js"></script>
+    <script>
+        // Additional login UI logic is inside auth.js
+        document.addEventListener('DOMContentLoaded', () => {
+            const emailForm = document.getElementById('emailForm');
+            const otpForm = document.getElementById('otpForm');
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+            const messageDiv = document.getElementById('message');
+            const backLink = document.getElementById('backToEmail');
+
+            let currentEmail = '';
+
+            emailForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('email').value;
+                currentEmail = email;
+                messageDiv.textContent = 'Sending OTP...';
+                try {
+                    const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({email})
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        step1.style.display = 'none';
+                        step2.style.display = 'block';
+                        messageDiv.textContent = 'OTP sent! Check your email.';
+                    } else {
+                        messageDiv.textContent = `Error: ${data.error}`;
+                    }
+                } catch (err) {
+                    messageDiv.textContent = 'Network error.';
+                }
+            });
+
+            otpForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const otp = document.getElementById('otp').value;
+                messageDiv.textContent = 'Verifying...';
+                try {
+                    const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({email: currentEmail, token: otp})
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        // Save token and user info
+                        localStorage.setItem('access_token', data.access_token);
+                        localStorage.setItem('user', JSON.stringify(data.user));
+                        messageDiv.textContent = 'Login successful! Redirecting...';
+                        setTimeout(() => {
+                            window.location.href = 'dashboard.html';
+                        }, 1000);
+                    } else {
+                        messageDiv.textContent = `Error: ${data.error}`;
+                    }
+                } catch (err) {
+                    messageDiv.textContent = 'Network error.';
+                }
+            });
+
+            backLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                step1.style.display = 'block';
+                step2.style.display = 'none';
+                messageDiv.textContent = '';
+            });
+        });
+    </script>
+</body>
+</html>

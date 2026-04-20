@@ -1,0 +1,37 @@
+services:
+  # Backend API (Flask)
+  - type: web
+    name: portfolio-backend
+    runtime: python
+    repo: https://github.com/your-username/neresocials.git
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn 'app:create_app()'
+    plan: free
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_ENV
+        value: production
+
+  # Frontend Static Site
+  - type: web
+    name: portfolio-frontend
+    runtime: static
+    repo: https://github.com/your-username/your-repo-name
+    branch: main
+    rootDir: frontend
+    buildCommand: null
+    publishDir: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: BACKEND_URL
+        value: https://portfolio-backend.onrender.com
