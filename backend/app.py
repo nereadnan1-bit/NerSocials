@@ -16,7 +16,7 @@ def get_supabase() -> Client:
     return create_client(app.config['SUPABASE_URL'], app.config['SUPABASE_KEY'])
 
 # Change this to YOUR email address (the one you'll use to log in as admin)
-ADMIN_EMAILS = ["your-email@example.com"]
+ADMIN_EMAILS = ["nereadnan1@gmail.com"]
 
 # Decorators
 def token_required(f):
