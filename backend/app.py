@@ -1,6 +1,8 @@
 # backend/app.py
 import os
-from flask import Flask, request, jsonify
+import sys
+from datetime import datetime
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from supabase import create_client, Client
 from functools import wraps
@@ -8,16 +10,23 @@ from functools import wraps
 app = Flask(__name__)
 
 # ============================================================
-# CORS CONFIGURATION – FIXED
+# FORCE CORS HEADERS ON EVERY RESPONSE (MANUAL FIX)
 # ============================================================
-# Replace with the EXACT URL of your frontend site on Render.
-# You can find this in your Render Dashboard under the Static Site.
-CORS(app, origins=[
-    "https://nersocials-1.onrender.com",
-    "https://nersocials-frontend.onrender.com",
-    "http://localhost:8000",
-    "http://localhost:3000"
-], supports_credentials=True)
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+@app.route('/<path:path>', methods=['OPTIONS'])
+@app.route('/', methods=['OPTIONS'])
+def options_handler(path=None):
+    return make_response('', 200)
+
+# Also keep Flask-CORS as a fallback
+CORS(app, origins="*", supports_credentials=True)
 
 # ============================================================
 # CONFIGURATION
@@ -27,22 +36,26 @@ app.config['SUPABASE_URL'] = os.environ.get('SUPABASE_URL')
 app.config['SUPABASE_KEY'] = os.environ.get('SUPABASE_KEY')
 
 def get_supabase() -> Client:
-    """Return a Supabase client instance."""
-    return create_client(
-        app.config['SUPABASE_URL'],
-        app.config['SUPABASE_KEY']
-    )
+    return create_client(app.config['SUPABASE_URL'], app.config['SUPABASE_KEY'])
+
+ADMIN_EMAILS = ["nereadnan1@gmail.com"]
 
 # ============================================================
-# ADMIN EMAIL(S)
+# DEBUG ENDPOINT – VERIFY DEPLOYMENT
 # ============================================================
-ADMIN_EMAILS = ["nereadnan1@gmail.com"]  # Change if needed
+@app.route('/debug')
+def debug():
+    return jsonify({
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "python_version": sys.version,
+        "cors_headers": "manual after_request enabled"
+    })
 
 # ============================================================
 # DECORATORS
 # ============================================================
 def token_required(f):
-    """Decorator to protect routes with Supabase JWT."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth_header = request.headers.get('Authorization')
@@ -59,7 +72,6 @@ def token_required(f):
     return decorated
 
 def admin_required(f):
-    """Decorator to restrict routes to admin users only."""
     @wraps(f)
     @token_required
     def decorated(*args, **kwargs):
@@ -69,16 +81,14 @@ def admin_required(f):
     return decorated
 
 # ============================================================
-# AUTHENTICATION ROUTES
+# AUTH ROUTES
 # ============================================================
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
-    """Send a one‑time password to the user's email."""
     data = request.get_json()
     email = data.get('email')
     if not email:
         return jsonify({"error": "Email required"}), 400
-
     supabase = get_supabase()
     try:
         supabase.auth.sign_in_with_otp({
@@ -91,13 +101,11 @@ def send_otp():
 
 @app.route('/api/auth/verify-otp', methods=['POST'])
 def verify_otp():
-    """Verify the OTP and return a Supabase JWT."""
     data = request.get_json()
     email = data.get('email')
     token = data.get('token')
     if not email or not token:
         return jsonify({"error": "Email and token required"}), 400
-
     supabase = get_supabase()
     try:
         response = supabase.auth.verify_otp({
@@ -107,10 +115,7 @@ def verify_otp():
         })
         return jsonify({
             "access_token": response.session.access_token,
-            "user": {
-                "id": response.user.id,
-                "email": response.user.email
-            }
+            "user": {"id": response.user.id, "email": response.user.email}
         }), 200
     except Exception as e:
         return jsonify({"error": "Invalid OTP"}), 401
@@ -118,7 +123,6 @@ def verify_otp():
 @app.route('/api/auth/me', methods=['GET'])
 @token_required
 def get_me():
-    """Return the currently logged‑in user's info."""
     user = request.user
     return jsonify({
         "id": user.id,
@@ -127,13 +131,12 @@ def get_me():
     }), 200
 
 # ============================================================
-# PUBLIC BLOG ROUTES
+# BLOG ROUTES (PUBLIC)
 # ============================================================
 TABLE_NAME = "blog_posts"
 
 @app.route('/api/blog/posts', methods=['GET'])
 def get_posts():
-    """Get all published blog posts (public)."""
     supabase = get_supabase()
     try:
         res = supabase.table(TABLE_NAME)\
@@ -147,7 +150,6 @@ def get_posts():
 
 @app.route('/api/blog/posts/<slug>', methods=['GET'])
 def get_post(slug):
-    """Get a single published post by its slug (public)."""
     supabase = get_supabase()
     try:
         res = supabase.table(TABLE_NAME)\
@@ -163,12 +165,11 @@ def get_post(slug):
         return jsonify({"error": str(e)}), 500
 
 # ============================================================
-# ADMIN BLOG ROUTES
+# BLOG ROUTES (ADMIN)
 # ============================================================
 @app.route('/api/blog/admin/posts', methods=['GET'])
 @admin_required
 def admin_get_posts():
-    """Get all posts (including drafts) – admin only."""
     supabase = get_supabase()
     try:
         res = supabase.table(TABLE_NAME)\
@@ -182,12 +183,9 @@ def admin_get_posts():
 @app.route('/api/blog/admin/posts', methods=['POST'])
 @admin_required
 def admin_create_post():
-    """Create a new blog post – admin only."""
     data = request.get_json()
-    required_fields = ['title', 'slug', 'content']
-    if not all(field in data for field in required_fields):
+    if not all(k in data for k in ['title', 'slug', 'content']):
         return jsonify({"error": "Missing required fields"}), 400
-
     supabase = get_supabase()
     post = {
         "title": data['title'],
@@ -205,19 +203,13 @@ def admin_create_post():
 @app.route('/api/blog/admin/posts/<slug>', methods=['PUT'])
 @admin_required
 def admin_update_post(slug):
-    """Update an existing post – admin only."""
     data = request.get_json()
-    allowed_fields = ['title', 'slug', 'content', 'excerpt', 'published']
-    update_data = {k: v for k, v in data.items() if k in allowed_fields}
-    if not update_data:
-        return jsonify({"error": "No valid fields to update"}), 400
-
+    update = {k: v for k, v in data.items() if k in ['title', 'slug', 'content', 'excerpt', 'published']}
+    if not update:
+        return jsonify({"error": "No valid fields"}), 400
     supabase = get_supabase()
     try:
-        res = supabase.table(TABLE_NAME)\
-            .update(update_data)\
-            .eq("slug", slug)\
-            .execute()
+        res = supabase.table(TABLE_NAME).update(update).eq("slug", slug).execute()
         if not res.data:
             return jsonify({"error": "Post not found"}), 404
         return jsonify(res.data[0]), 200
@@ -227,21 +219,17 @@ def admin_update_post(slug):
 @app.route('/api/blog/admin/posts/<slug>', methods=['DELETE'])
 @admin_required
 def admin_delete_post(slug):
-    """Delete a post – admin only."""
     supabase = get_supabase()
     try:
-        res = supabase.table(TABLE_NAME)\
-            .delete()\
-            .eq("slug", slug)\
-            .execute()
+        res = supabase.table(TABLE_NAME).delete().eq("slug", slug).execute()
         if not res.data:
             return jsonify({"error": "Post not found"}), 404
-        return jsonify({"message": "Post deleted"}), 200
+        return jsonify({"message": "Deleted"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 # ============================================================
-# HEALTH CHECK
+# ROOT
 # ============================================================
 @app.route('/')
 def index():
