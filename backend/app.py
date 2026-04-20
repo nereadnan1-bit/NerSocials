@@ -6,7 +6,14 @@ from supabase import create_client, Client
 from functools import wraps
 
 app = Flask(__name__)
-CORS(app, origins=["*"])  # Allow all origins for now, tighten later
+
+# ✅ CORS FIX: Explicitly allow your frontend URLs
+CORS(app, origins=[
+    "https://nersocials-1.onrender.com",
+    "https://nersocials-frontend.onrender.com",
+    "http://localhost:8000",
+    "http://localhost:3000"
+])
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['SUPABASE_URL'] = os.environ.get('SUPABASE_URL')
@@ -15,10 +22,12 @@ app.config['SUPABASE_KEY'] = os.environ.get('SUPABASE_KEY')
 def get_supabase() -> Client:
     return create_client(app.config['SUPABASE_URL'], app.config['SUPABASE_KEY'])
 
-# Change this to YOUR email address (the one you'll use to log in as admin)
+# ✅ Your admin email (already set correctly)
 ADMIN_EMAILS = ["nereadnan1@gmail.com"]
 
+# ---------------------------
 # Decorators
+# ---------------------------
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -44,7 +53,9 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+# ---------------------------
 # Auth Routes
+# ---------------------------
 @app.route('/api/auth/send-otp', methods=['POST'])
 def send_otp():
     data = request.get_json()
@@ -53,7 +64,10 @@ def send_otp():
         return jsonify({"error": "Email required"}), 400
     supabase = get_supabase()
     try:
-        supabase.auth.sign_in_with_otp({"email": email, "options": {"should_create_user": True}})
+        supabase.auth.sign_in_with_otp({
+            "email": email,
+            "options": {"should_create_user": True}
+        })
         return jsonify({"message": "OTP sent"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -67,7 +81,11 @@ def verify_otp():
         return jsonify({"error": "Email and token required"}), 400
     supabase = get_supabase()
     try:
-        response = supabase.auth.verify_otp({"email": email, "token": token, "type": "email"})
+        response = supabase.auth.verify_otp({
+            "email": email,
+            "token": token,
+            "type": "email"
+        })
         return jsonify({
             "access_token": response.session.access_token,
             "user": {"id": response.user.id, "email": response.user.email}
@@ -85,14 +103,20 @@ def get_me():
         "is_admin": user.email in ADMIN_EMAILS
     }), 200
 
-# Blog Routes
+# ---------------------------
+# Blog Routes (Public)
+# ---------------------------
 TABLE_NAME = "blog_posts"
 
 @app.route('/api/blog/posts', methods=['GET'])
 def get_posts():
     supabase = get_supabase()
     try:
-        res = supabase.table(TABLE_NAME).select("*").eq("published", True).order("created_at", desc=True).execute()
+        res = supabase.table(TABLE_NAME)\
+            .select("*")\
+            .eq("published", True)\
+            .order("created_at", desc=True)\
+            .execute()
         return jsonify(res.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -101,26 +125,38 @@ def get_posts():
 def get_post(slug):
     supabase = get_supabase()
     try:
-        res = supabase.table(TABLE_NAME).select("*").eq("slug", slug).eq("published", True).single().execute()
+        res = supabase.table(TABLE_NAME)\
+            .select("*")\
+            .eq("slug", slug)\
+            .eq("published", True)\
+            .single()\
+            .execute()
         if not res.data:
             return jsonify({"error": "Not found"}), 404
         return jsonify(res.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ---------------------------
+# Blog Routes (Admin Only)
+# ---------------------------
 @app.route('/api/blog/admin/posts', methods=['GET'])
 @admin_required
 def admin_get_posts():
     supabase = get_supabase()
-    res = supabase.table(TABLE_NAME).select("*").order("created_at", desc=True).execute()
+    res = supabase.table(TABLE_NAME)\
+        .select("*")\
+        .order("created_at", desc=True)\
+        .execute()
     return jsonify(res.data), 200
 
 @app.route('/api/blog/admin/posts', methods=['POST'])
 @admin_required
 def admin_create_post():
     data = request.get_json()
-    if not all(k in data for k in ['title', 'slug', 'content']):
-        return jsonify({"error": "Missing fields"}), 400
+    required = ['title', 'slug', 'content']
+    if not all(k in data for k in required):
+        return jsonify({"error": "Missing required fields"}), 400
     supabase = get_supabase()
     post = {
         "title": data['title'],
@@ -136,7 +172,8 @@ def admin_create_post():
 @admin_required
 def admin_update_post(slug):
     data = request.get_json()
-    update = {k: v for k, v in data.items() if k in ['title', 'content', 'excerpt', 'published', 'slug']}
+    update = {k: v for k, v in data.items()
+              if k in ['title', 'content', 'excerpt', 'published', 'slug']}
     if not update:
         return jsonify({"error": "No fields to update"}), 400
     supabase = get_supabase()
@@ -154,6 +191,9 @@ def admin_delete_post(slug):
         return jsonify({"error": "Not found"}), 404
     return jsonify({"message": "Deleted"}), 200
 
+# ---------------------------
+# Health Check
+# ---------------------------
 @app.route('/')
 def index():
     return jsonify({"message": "Portfolio API is running"}), 200
