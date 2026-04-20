@@ -1,7 +1,7 @@
 // Common frontend utilities
 window.API_BASE = window.location.hostname === 'localhost' 
     ? 'http://localhost:5000' 
-    : 'https://portfolio-backend.onrender.com';
+    : 'https://nersocials.onrender.com';
 
 // Update nav based on auth status (called from auth.js)
 function updateAuthUI() {
