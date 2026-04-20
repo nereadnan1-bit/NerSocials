@@ -10,22 +10,26 @@ from functools import wraps
 app = Flask(__name__)
 
 # ============================================================
-# FORCE CORS HEADERS ON EVERY RESPONSE (MANUAL FIX)
+# GLOBAL CORS HANDLER – INTERCEPT OPTIONS REQUESTS FIRST
 # ============================================================
+@app.before_request
+def handle_preflight():
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response, 200
+
+# Fallback after_request for other methods
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
     response.headers['Access-Control-Allow-Credentials'] = 'true'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
-@app.route('/<path:path>', methods=['OPTIONS'])
-@app.route('/', methods=['OPTIONS'])
-def options_handler(path=None):
-    return make_response('', 200)
-
-# Also keep Flask-CORS as a fallback
+# Also keep Flask-CORS
 CORS(app, origins="*", supports_credentials=True)
 
 # ============================================================
@@ -41,15 +45,14 @@ def get_supabase() -> Client:
 ADMIN_EMAILS = ["nereadnan1@gmail.com"]
 
 # ============================================================
-# DEBUG ENDPOINT – VERIFY DEPLOYMENT
+# DEBUG ENDPOINT
 # ============================================================
 @app.route('/debug')
 def debug():
     return jsonify({
         "status": "ok",
         "timestamp": datetime.utcnow().isoformat(),
-        "python_version": sys.version,
-        "cors_headers": "manual after_request enabled"
+        "python_version": sys.version
     })
 
 # ============================================================
