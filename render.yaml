@@ -1,9 +1,8 @@
 services:
-  # Backend API (Flask)
   - type: web
-    name: portfolio-backend
+    name: nersocials-api
     runtime: python
-    repo: https://github.com/your-username/neresocials.git
+    repo: https://github.com/nereadnan1-bit/NerSocials
     branch: main
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -16,22 +15,13 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
-      - key: FLASK_ENV
-        value: production
 
-  # Frontend Static Site
-  - type: web
-    name: portfolio-frontend
-    runtime: static
-    repo: https://github.com/your-username/your-repo-name
+  - type: static
+    name: nersocials-frontend
+    repo: https://github.com/nereadnan1-bit/NerSocials
     branch: main
     rootDir: frontend
-    buildCommand: null
     publishDir: .
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
     envVars:
       - key: BACKEND_URL
-        value: https://portfolio-backend.onrender.com
+        value: https://nersocials-api.onrender.com

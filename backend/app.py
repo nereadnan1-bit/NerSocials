@@ -1,8 +1,7 @@
-# backend/app.py
 import os
 import sys
 from datetime import datetime
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from supabase import create_client, Client
 from functools import wraps
@@ -10,30 +9,25 @@ from functools import wraps
 app = Flask(__name__)
 
 # ============================================================
-# GLOBAL CORS HANDLER – INTERCEPT OPTIONS REQUESTS FIRST
+# CORS CONFIGURATION – Guaranteed to work
 # ============================================================
-@app.before_request
-def handle_preflight():
-    if request.method == 'OPTIONS':
-        response = make_response()
-        response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        return response, 200
+CORS(app, origins=[
+    "https://nersocials-1.onrender.com",
+    "https://nersocials-frontend.onrender.com",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+], supports_credentials=True)
 
-# Fallback after_request for other methods
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
     response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
-# Also keep Flask-CORS
-CORS(app, origins="*", supports_credentials=True)
-
 # ============================================================
-# CONFIGURATION
+# Configuration
 # ============================================================
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 app.config['SUPABASE_URL'] = os.environ.get('SUPABASE_URL')
@@ -42,21 +36,11 @@ app.config['SUPABASE_KEY'] = os.environ.get('SUPABASE_KEY')
 def get_supabase() -> Client:
     return create_client(app.config['SUPABASE_URL'], app.config['SUPABASE_KEY'])
 
+# Admin email(s) – only these emails get admin access
 ADMIN_EMAILS = ["nereadnan1@gmail.com"]
 
 # ============================================================
-# DEBUG ENDPOINT
-# ============================================================
-@app.route('/debug')
-def debug():
-    return jsonify({
-        "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
-        "python_version": sys.version
-    })
-
-# ============================================================
-# DECORATORS
+# Decorators
 # ============================================================
 def token_required(f):
     @wraps(f)
@@ -69,7 +53,7 @@ def token_required(f):
         try:
             user = supabase.auth.get_user(token)
             request.user = user.user
-        except Exception as e:
+        except Exception:
             return jsonify({"error": "Invalid token"}), 401
         return f(*args, **kwargs)
     return decorated
@@ -84,44 +68,62 @@ def admin_required(f):
     return decorated
 
 # ============================================================
-# AUTH ROUTES
+# Authentication Routes (Username = Email, Password)
 # ============================================================
-@app.route('/api/auth/send-otp', methods=['POST'])
-def send_otp():
+@app.route('/api/auth/register', methods=['POST'])
+def register():
     data = request.get_json()
     email = data.get('email')
-    if not email:
-        return jsonify({"error": "Email required"}), 400
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({"error": "Email and password required"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
     supabase = get_supabase()
     try:
-        supabase.auth.sign_in_with_otp({
+        response = supabase.auth.sign_up({
             "email": email,
-            "options": {"should_create_user": True}
+            "password": password
         })
-        return jsonify({"message": "OTP sent"}), 200
+        return jsonify({
+            "message": "Registration successful. Please check your email to confirm.",
+            "user": response.user.email
+        }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route('/api/auth/verify-otp', methods=['POST'])
-def verify_otp():
+@app.route('/api/auth/login', methods=['POST'])
+def login():
     data = request.get_json()
     email = data.get('email')
-    token = data.get('token')
-    if not email or not token:
-        return jsonify({"error": "Email and token required"}), 400
+    password = data.get('password')
+    if not email or not password:
+        return jsonify({"error": "Email and password required"}), 400
     supabase = get_supabase()
     try:
-        response = supabase.auth.verify_otp({
+        response = supabase.auth.sign_in_with_password({
             "email": email,
-            "token": token,
-            "type": "email"
+            "password": password
         })
         return jsonify({
             "access_token": response.session.access_token,
-            "user": {"id": response.user.id, "email": response.user.email}
+            "user": {
+                "id": response.user.id,
+                "email": response.user.email
+            }
         }), 200
     except Exception as e:
-        return jsonify({"error": "Invalid OTP"}), 401
+        return jsonify({"error": "Invalid credentials"}), 401
+
+@app.route('/api/auth/logout', methods=['POST'])
+@token_required
+def logout():
+    supabase = get_supabase()
+    try:
+        supabase.auth.sign_out()
+        return jsonify({"message": "Logged out"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route('/api/auth/me', methods=['GET'])
 @token_required
@@ -134,7 +136,7 @@ def get_me():
     }), 200
 
 # ============================================================
-# BLOG ROUTES (PUBLIC)
+# Public Blog Routes
 # ============================================================
 TABLE_NAME = "blog_posts"
 
@@ -168,7 +170,7 @@ def get_post(slug):
         return jsonify({"error": str(e)}), 500
 
 # ============================================================
-# BLOG ROUTES (ADMIN)
+# Admin Blog Routes
 # ============================================================
 @app.route('/api/blog/admin/posts', methods=['GET'])
 @admin_required
@@ -187,7 +189,8 @@ def admin_get_posts():
 @admin_required
 def admin_create_post():
     data = request.get_json()
-    if not all(k in data for k in ['title', 'slug', 'content']):
+    required = ['title', 'slug', 'content']
+    if not all(k in data for k in required):
         return jsonify({"error": "Missing required fields"}), 400
     supabase = get_supabase()
     post = {
@@ -231,21 +234,20 @@ def admin_delete_post(slug):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-
-@app.route('/newbackend2026')
-def new_backend_check():
-    return jsonify({
-        "version": "cors-fixed-final",
-        "timestamp": datetime.utcnow().isoformat(),
-        "message": "This is the updated backend with manual CORS fix."
-    })
-
 # ============================================================
-# ROOT
+# Health Check & Debug
 # ============================================================
 @app.route('/')
 def index():
     return jsonify({"message": "Portfolio API is running"}), 200
+
+@app.route('/debug')
+def debug():
+    return jsonify({
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "python_version": sys.version
+    })
 
 if __name__ == '__main__':
     app.run()

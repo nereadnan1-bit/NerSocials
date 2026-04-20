@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - NerSocials</title>
+    <title>Register - NerSocials</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,42 +11,41 @@
         <nav>
             <h1><a href="index.html">NerSocials</a></h1>
             <ul>
-                <li><a href="register.html">Register</a></li>
+                <li><a href="login.html">Login</a></li>
             </ul>
         </nav>
     </header>
     <main>
-        <h2>Login</h2>
-        <form id="loginForm">
+        <h2>Register</h2>
+        <form id="registerForm">
             <label>Email: <input type="email" id="email" required></label>
-            <label>Password: <input type="password" id="password" required></label>
-            <button type="submit">Login</button>
+            <label>Password: <input type="password" id="password" required minlength="6"></label>
+            <button type="submit">Register</button>
         </form>
-        <p>Don't have an account? <a href="register.html">Register</a></p>
+        <p>Already have an account? <a href="login.html">Login</a></p>
         <div id="message"></div>
     </main>
     <script src="js/main.js"></script>
     <script>
         const API_BASE = window.API_BASE;
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const msg = document.getElementById('message');
-            msg.textContent = 'Logging in...';
+            msg.textContent = 'Registering...';
             try {
-                const res = await fetch(`${API_BASE}/api/auth/login`, {
+                const res = await fetch(`${API_BASE}/api/auth/register`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ email, password })
                 });
                 const data = await res.json();
                 if (res.ok) {
-                    localStorage.setItem('access_token', data.access_token);
-                    localStorage.setItem('user', JSON.stringify(data.user));
-                    window.location.href = 'dashboard.html';
+                    msg.textContent = 'Registration successful! Check your email to confirm, then login.';
+                    setTimeout(() => window.location.href = 'login.html', 3000);
                 } else {
-                    msg.textContent = data.error || 'Login failed';
+                    msg.textContent = data.error || 'Registration failed';
                 }
             } catch (err) {
                 msg.textContent = 'Network error';
